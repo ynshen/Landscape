@@ -27,7 +27,7 @@ peak_doc = DocHelper(
 
 
 def _parse_seqs_input(seqs):
-    """Convert input seqs to pd.Series if is not pd.DataFrame"""
+    """Convert input seqs to pd.Series or pd.DataFrame if is not"""
     if isinstance(seqs, (list, np.ndarray)):
         return pd.Series(data=seqs, index=seqs)
     elif isinstance(seqs, pd.Series):
@@ -74,14 +74,18 @@ def _get_peak_coverage(dist_to_center, seq_len, letterbook_size, max_radius):
     return results
 
 
-def _get_peak_abun(dist_to_center, max_radius, table, use_relative):
+def _get_peak_abun(dist_to_center, max_radius, table, use_relative, center, dist_type):
     """report the (relative) abundance and number of unique sequences with different distances
 
     Returns:
-        Two pd.DataFrame instance. First one is relative abundance with distance as indices and samples as columns;
+        Two pd.DataFrame instance. First one is (relative) abundance with distance as indices and samples as columns;
           Second is number of unique sequences detected with same layout
     """
 
+    seq_not_in = table.index[~table.index.isin(dist_to_center.index)]
+    if len(seq_not_in) > 0:
+        dist_to_center = pd.concat([dist_to_center,
+                                    _get_distance(list(seq_not_in), center_seq=center, dist_type=dist_type)])
     dist_list = pd.Series(data=np.arange(max_radius + 1), index=np.arange(max_radius + 1))
 
     def get_abun(dist):
@@ -105,12 +109,15 @@ def _get_distance(seqs, center_seq, dist_type):
     """Update self.dist_to_center with current self.center_seq, self.seqs, and dist_type"""
     from functools import partial
 
+    seqs = _parse_seqs_input(seqs)
+
     if dist_type == 'hamming':
         logging.info('Calculating distance of seqs to center using hamming distance...')
         dist_to_center = seqs.index.to_series().map(partial(_hamming_dist_to_center, center_seq=center_seq))
     else:
         logging.info('Calculating distance of seqs to center using edit distance...')
         dist_to_center = seqs.index.to_series().map(partial(_edit_dist_to_center, center_seq=center_seq))
+    logging.info('  Finished')
     return dist_to_center
 
 
@@ -201,7 +208,9 @@ Args:
         return _get_peak_abun(dist_to_center=self.dist_to_center,
                               max_radius=self.radius if max_radius is None else max_radius,
                               table=table,
-                              use_relative=use_relative)
+                              use_relative=use_relative,
+                              center=self.center_seq,
+                              dist_type=self.dist_type)
 
 
 class PeakCollection:
@@ -215,6 +224,7 @@ class PeakCollection:
             self.center_seq = {peak.name: peak.center_seq for peak in peaks}
             self.dist_to_center = pd.DataFrame({peak.name: peak.dist_to_center for peak in peaks}).min(axis=1)
             self.peak_num = len(peaks)
+            self.dist_type = peaks[0].dist_type
         else:
             logging.error('Peaks needs to be a list of Peak instances')
             raise ValueError('Peaks needs to be a list of Peak instances')
@@ -233,4 +243,6 @@ class PeakCollection:
         return _get_peak_abun(dist_to_center=self.dist_to_center,
                               max_radius=max_radius,
                               table=table,
-                              use_relative=use_relative)
+                              use_relative=use_relative,
+                              center=self.center_seq,
+                              dist_type=self.dist_type)
