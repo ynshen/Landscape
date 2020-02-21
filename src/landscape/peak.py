@@ -26,6 +26,14 @@ peak_doc = DocHelper(
 )
 
 
+class Scope:
+    """Simple scope to contain relavent info"""
+    def __init__(self, **kwargs):
+        if kwargs != {}:
+            for key, arg in kwargs.items():
+                setattr(self, key, arg)
+
+
 def _parse_seqs_input(seqs):
     """Convert input seqs to pd.Series or pd.DataFrame if is not"""
     if isinstance(seqs, (list, np.ndarray)):
@@ -165,6 +173,12 @@ Args:
         self.dist_to_center = None
         self.letterbook_size = letterbook_size
         self.update_distance()
+
+        from .visualization import peak_plot
+        from functools import partial
+
+        self.vis = Scope(peak_plot=partial(peak_plot, peak=self))
+        self.vis.peak_plot.__doc__ = peak_plot.__doc__
 
     def update_distance(self):
         self.dist_to_center = _get_distance(seqs=self.seqs, center_seq=self.center_seq, dist_type=self.dist_type)
